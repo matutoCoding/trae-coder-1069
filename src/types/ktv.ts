@@ -22,6 +22,18 @@ export interface TimeSlot {
   status: 'available' | 'booked' | 'using';
 }
 
+export type OperationType = 'checkin' | 'clear' | 'timeout_release';
+
+export interface OperationLog {
+  id: string;
+  bookingId: string;
+  type: OperationType;
+  operatorName: string;
+  operatorId: string;
+  operateAt: string;
+  remark?: string;
+}
+
 export interface Booking {
   id: string;
   roomId: string;
@@ -39,6 +51,10 @@ export interface Booking {
   createdAt: string;
   timeoutAt?: string;
   overcallCount: number;
+  source?: 'normal' | 'backup';
+  backupId?: string;
+  operations?: OperationLog[];
+  clearedAt?: string;
 }
 
 export interface QueueItem {

@@ -8,6 +8,7 @@ import type {
   Package,
   UserInfo,
   OvercallRecord,
+  OperationLog,
   BookingStatus,
   QueueStatus,
   BackupStatus,
@@ -66,6 +67,7 @@ interface KtvState {
   acceptBackup: (backupId: string) => boolean;
   declineBackup: (backupId: string) => boolean;
   checkExpiredBackups: () => void;
+  notifyBackup: (backupId: string) => boolean;
   notifyNextBackupByType: (roomType: string) => void;
   processRoomRelease: (roomId: string) => void;
 
@@ -129,7 +131,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         totalPrice,
         createdAt: dayjs().format(),
         timeoutAt: dayjs().add(15, 'minute').format(),
-        overcallCount: 0
+        overcallCount: 0,
+        source: 'normal',
+        operations: []
       };
 
       set(state => ({
@@ -179,12 +183,26 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       );
       if (timeoutBookings.length === 0) return;
 
+      const nowStr = now.format();
+      const timeoutIds = new Set(timeoutBookings.map(b => b.id));
+
       set(state => ({
-        bookings: state.bookings.map(b =>
-          timeoutBookings.find(tb => tb.id === b.id)
-            ? { ...b, status: 'timeout' as BookingStatus }
-            : b
-        ),
+        bookings: state.bookings.map(b => {
+          if (!timeoutIds.has(b.id)) return b;
+          const opLog: OperationLog = {
+            id: `op-${Date.now()}-${b.id}`,
+            bookingId: b.id,
+            type: 'timeout_release',
+            operatorName: '系统',
+            operatorId: 'system',
+            operateAt: nowStr
+          };
+          return {
+            ...b,
+            status: 'timeout' as BookingStatus,
+            operations: [...(b.operations || []), opLog]
+          };
+        }),
         rooms: state.rooms.map(r => {
           const timeoutBooking = timeoutBookings.find(tb => tb.roomId === r.id);
           return timeoutBooking ? { ...r, status: 'available' as RoomStatus, currentBooking: undefined } : r;
@@ -194,6 +212,7 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       timeoutBookings.forEach(booking => {
         get().processRoomRelease(booking.roomId);
       });
+      console.log('[Booking] 超时释放', { count: timeoutBookings.length });
     } catch (error) {
       console.error('[Booking] 超时检查失败', error);
     }
@@ -247,7 +266,7 @@ export const useKtvStore = create<KtvState>((set, get) => ({
 
   clearRoom: (roomId) => {
     try {
-      const { rooms, bookings } = get();
+      const { rooms, bookings, user } = get();
       const room = rooms.find(r => r.id === roomId);
       if (!room) return false;
 
@@ -255,19 +274,36 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         b.roomId === roomId && ['pending', 'confirmed', 'using'].includes(b.status)
       );
 
+      const now = dayjs().format();
+      const opLog: OperationLog | undefined = activeBooking ? {
+        id: `op-${Date.now()}`,
+        bookingId: activeBooking.id,
+        type: 'clear',
+        operatorName: user.name,
+        operatorId: user.id,
+        operateAt: now
+      } : undefined;
+
+      const completedBooking = activeBooking ? {
+        ...activeBooking,
+        status: 'completed' as BookingStatus,
+        clearedAt: now,
+        operations: [...(activeBooking.operations || []), ...(opLog ? [opLog] : [])]
+      } : undefined;
+
       set(state => ({
         rooms: state.rooms.map(r =>
           r.id === roomId ? { ...r, status: 'available' as RoomStatus, currentBooking: undefined } : r
         ),
-        bookings: activeBooking
+        bookings: completedBooking
           ? state.bookings.map(b =>
-              b.id === activeBooking.id ? { ...b, status: 'completed' as BookingStatus } : b
+              b.id === completedBooking.id ? completedBooking : b
             )
           : state.bookings
       }));
 
       get().processRoomRelease(roomId);
-      console.log('[Room] 清台完成', { roomId });
+      console.log('[Room] 清台完成', { roomId, operator: user.name });
       return true;
     } catch (error) {
       console.error('[Room] 清台失败', error);
@@ -503,7 +539,10 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         totalPrice: availableRoom.pricePerHour * 3,
         createdAt: now.format(),
         timeoutAt: now.add(15, 'minute').format(),
-        overcallCount: 0
+        overcallCount: 0,
+        source: 'backup',
+        backupId: backup.id,
+        operations: []
       };
 
       set(state => ({
@@ -668,22 +707,37 @@ export const useKtvStore = create<KtvState>((set, get) => ({
 
   checkinBooking: (bookingId) => {
     try {
-      const { bookings, rooms } = get();
+      const { bookings, user } = get();
       const booking = bookings.find(b => b.id === bookingId);
       if (!booking || booking.status !== 'pending') return false;
 
+      const opLog: OperationLog = {
+        id: `op-${Date.now()}`,
+        bookingId,
+        type: 'checkin',
+        operatorName: user.name,
+        operatorId: user.id,
+        operateAt: dayjs().format()
+      };
+
+      const updatedBooking: Booking = {
+        ...booking,
+        status: 'using' as BookingStatus,
+        operations: [...(booking.operations || []), opLog]
+      };
+
       set(state => ({
         bookings: state.bookings.map(b =>
-          b.id === bookingId ? { ...b, status: 'using' as BookingStatus } : b
+          b.id === bookingId ? updatedBooking : b
         ),
         rooms: state.rooms.map(r =>
           r.id === booking.roomId
-            ? { ...r, status: 'using' as RoomStatus, currentBooking: { ...booking, status: 'using' as BookingStatus } }
+            ? { ...r, status: 'using' as RoomStatus, currentBooking: updatedBooking }
             : r
         )
       }));
 
-      console.log('[Booking] 到店核销', { bookingId, roomId: booking.roomId });
+      console.log('[Booking] 到店核销', { bookingId, roomId: booking.roomId, operator: user.name });
       return true;
     } catch (error) {
       console.error('[Booking] 核销失败', error);

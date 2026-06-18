@@ -1,5 +1,8 @@
 /// <reference types="@tarojs/taro" />
 
+declare function defineAppConfig(config: any): any;
+declare function definePageConfig(config: any): any;
+
 declare module '*.png';
 declare module '*.gif';
 declare module '*.jpg';

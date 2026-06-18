@@ -6,6 +6,8 @@ import dayjs from 'dayjs';
 import styles from './index.module.scss';
 import { useKtvStore } from '@/store/useKtvStore';
 import StatusBadge from '@/components/StatusBadge';
+import type { OperationLog } from '@/types/ktv';
+import { getCountdown } from '@/utils';
 
 interface TimelineItem {
   id: string;
@@ -18,7 +20,16 @@ interface TimelineItem {
   expiresAt?: string;
   price?: number;
   bookingId?: string;
+  source?: 'normal' | 'backup';
+  operations?: OperationLog[];
+  clearedAt?: string;
 }
+
+const opTypeMap: Record<string, { label: string; icon: string }> = {
+  checkin: { label: '到店核销', icon: '✅' },
+  clear: { label: '清台完成', icon: '🧹' },
+  timeout_release: { label: '超时释放', icon: '⏰' }
+};
 
 const MinePage: React.FC = () => {
   const {
@@ -37,10 +48,18 @@ const MinePage: React.FC = () => {
   const myQueueHistory = getMyQueueHistory();
   const myBackupHistory = getMyBackupHistory();
 
+  const [, setTick] = React.useState(0);
+
   useDidShow(() => {
     checkTimeoutBookings();
     checkExpiredBackups();
+    setTick(t => t + 1);
   });
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   const timeline = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = [];
@@ -55,7 +74,10 @@ const MinePage: React.FC = () => {
         createdAt: b.createdAt,
         timeoutAt: b.timeoutAt,
         price: b.totalPrice,
-        bookingId: b.id
+        bookingId: b.id,
+        source: b.source,
+        operations: b.operations,
+        clearedAt: b.clearedAt
       });
     });
 
@@ -134,7 +156,8 @@ const MinePage: React.FC = () => {
     return map[type] || '📋';
   };
 
-  const getTypeLabel = (type: string) => {
+  const getTypeLabel = (type: string, source?: 'normal' | 'backup') => {
+    if (type === 'booking' && source === 'backup') return '候补补位';
     const map: Record<string, string> = {
       booking: '预订',
       queue: '排队',
@@ -205,83 +228,134 @@ const MinePage: React.FC = () => {
         <Text className={styles.sectionTitle}>📋 我的时间线</Text>
         {timeline.length > 0 ? (
           <View className={styles.timeline}>
-            {timeline.map(item => (
-              <View key={item.id} className={styles.timelineItem}>
-                <View className={styles.timelineIcon}>{getTypeIcon(item.type)}</View>
-                <View className={styles.timelineContent}>
-                  <View className={styles.timelineHeader}>
-                    <View className={styles.timelineTitleRow}>
-                      <Text className={styles.timelineTypeTag}>{getTypeLabel(item.type)}</Text>
-                      <Text className={styles.timelineTitle}>{item.title}</Text>
+            {timeline.map(item => {
+              const showPendingHighlight = item.type === 'booking' && item.status === 'pending';
+              const cd = showPendingHighlight ? getCountdown(item.timeoutAt || '') : null;
+              const urgent = cd && !cd.expired && cd.minutes <= 5;
+              return (
+                <View
+                  key={item.id}
+                  className={classnames(
+                    styles.timelineItem,
+                    showPendingHighlight && urgent && styles.timelineUrgent
+                  )}
+                >
+                  <View className={styles.timelineIcon}>{getTypeIcon(item.type)}</View>
+                  <View className={styles.timelineContent}>
+                    <View className={styles.timelineHeader}>
+                      <View className={styles.timelineTitleRow}>
+                        <Text className={classnames(
+                          styles.timelineTypeTag,
+                          item.source === 'backup' && styles.backupTag
+                        )}>{getTypeLabel(item.type, item.source)}</Text>
+                        <Text className={styles.timelineTitle}>{item.title}</Text>
+                      </View>
+                      <StatusBadge status={item.status} />
                     </View>
-                    <StatusBadge status={item.status} />
-                  </View>
-                  <Text className={styles.timelineSubtitle}>{item.subtitle}</Text>
+                    <Text className={styles.timelineSubtitle}>{item.subtitle}</Text>
 
-                  <View className={styles.timelineTimeRow}>
-                    <View className={styles.timeBlock}>
-                      <Text className={styles.timeLabel}>创建</Text>
-                      <Text className={styles.timeValue}>{formatTime(item.createdAt)}</Text>
-                    </View>
-
-                    {item.timeoutAt && item.type === 'booking' && ['pending', 'timeout'].includes(item.status) && (
-                      <View className={styles.timeBlock}>
-                        <Text className={styles.timeLabel}>到店截止</Text>
-                        <Text className={classnames(styles.timeValue, item.status === 'timeout' && styles.timeExpired)}>
-                          {formatTime(item.timeoutAt)}
+                    {showPendingHighlight && cd && (
+                      <View className={classnames(styles.countdownBanner, cd.expired && styles.expired, urgent && styles.urgent)}>
+                        <Text className={styles.countdownBannerIcon}>⏰</Text>
+                        <Text className={styles.countdownBannerText}>
+                          {cd.expired
+                            ? '到店时间已过，包厢已释放'
+                            : `距离到店截止还有 ${cd.minutes}分${cd.seconds}秒`
+                          }
                         </Text>
                       </View>
                     )}
 
-                    {item.expiresAt && item.type === 'backup' && item.status === 'notified' && (
+                    <View className={styles.timelineTimeRow}>
                       <View className={styles.timeBlock}>
-                        <Text className={styles.timeLabel}>确认截止</Text>
-                        <Text className={styles.timeValue}>{formatTime(item.expiresAt)}</Text>
+                        <Text className={styles.timeLabel}>创建</Text>
+                        <Text className={styles.timeValue}>{formatTime(item.createdAt)}</Text>
+                      </View>
+
+                      {item.timeoutAt && item.type === 'booking' && (
+                        <View className={styles.timeBlock}>
+                          <Text className={styles.timeLabel}>到店截止</Text>
+                          <Text className={classnames(styles.timeValue, item.status === 'timeout' && styles.timeExpired)}>
+                            {formatTime(item.timeoutAt)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {item.expiresAt && item.type === 'backup' && item.status === 'notified' && (
+                        <View className={styles.timeBlock}>
+                          <Text className={styles.timeLabel}>确认截止</Text>
+                          <Text className={styles.timeValue}>{formatTime(item.expiresAt)}</Text>
+                        </View>
+                      )}
+
+                      {item.clearedAt && (
+                        <View className={styles.timeBlock}>
+                          <Text className={styles.timeLabel}>清台</Text>
+                          <Text className={styles.timeValue}>{formatTime(item.clearedAt)}</Text>
+                        </View>
+                      )}
+
+                      {item.price !== undefined && (
+                        <View className={styles.timeBlock}>
+                          <Text className={styles.timeLabel}>金额</Text>
+                          <Text className={classnames(styles.timeValue, styles.priceValue)}>¥{item.price}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {item.operations && item.operations.length > 0 && (
+                      <View className={styles.opLogs}>
+                        {item.operations.map(op => (
+                          <View key={op.id} className={styles.opLogItem}>
+                            <Text className={styles.opLogIcon}>{opTypeMap[op.type]?.icon || '📝'}</Text>
+                            <View className={styles.opLogContent}>
+                              <Text className={styles.opLogLabel}>
+                                {opTypeMap[op.type]?.label || op.type}
+                              </Text>
+                              <Text className={styles.opLogMeta}>
+                                {op.operatorName} · {formatTime(op.operateAt)}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
                       </View>
                     )}
 
-                    {item.price !== undefined && (
-                      <View className={styles.timeBlock}>
-                        <Text className={styles.timeLabel}>金额</Text>
-                        <Text className={classnames(styles.timeValue, styles.priceValue)}>¥{item.price}</Text>
+                    {item.type === 'booking' && item.status === 'pending' && item.bookingId && (
+                      <View className={styles.timelineActions}>
+                        <Button
+                          className={classnames(styles.actionBtn, styles.primaryBtn)}
+                          onClick={() => handleCheckin(item.bookingId!)}
+                        >
+                          到店核销
+                        </Button>
+                        <Button
+                          className={classnames(styles.actionBtn, styles.dangerBtn)}
+                          onClick={() => handleCancelBooking(item.bookingId!)}
+                        >
+                          取消预订
+                        </Button>
+                      </View>
+                    )}
+
+                    {item.type === 'booking' && item.status === 'confirmed' && item.bookingId && (
+                      <View className={styles.timelineActions}>
+                        <Button
+                          className={classnames(styles.actionBtn, styles.dangerBtn)}
+                          onClick={() => handleCancelBooking(item.bookingId!)}
+                        >
+                          取消预订
+                        </Button>
                       </View>
                     )}
                   </View>
-
-                  {item.type === 'booking' && item.status === 'pending' && item.bookingId && (
-                    <View className={styles.timelineActions}>
-                      <Button
-                        className={classnames(styles.actionBtn, styles.primaryBtn)}
-                        onClick={() => handleCheckin(item.bookingId!)}
-                      >
-                        到店核销
-                      </Button>
-                      <Button
-                        className={classnames(styles.actionBtn, styles.dangerBtn)}
-                        onClick={() => handleCancelBooking(item.bookingId!)}
-                      >
-                        取消预订
-                      </Button>
-                    </View>
-                  )}
-
-                  {item.type === 'booking' && item.status === 'confirmed' && item.bookingId && (
-                    <View className={styles.timelineActions}>
-                      <Button
-                        className={classnames(styles.actionBtn, styles.dangerBtn)}
-                        onClick={() => handleCancelBooking(item.bookingId!)}
-                      >
-                        取消预订
-                      </Button>
-                    </View>
-                  )}
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <View className={styles.emptyState}>
-            <Text className={styles.emptyIcon}>�</Text>
+            <Text className={styles.emptyIcon}>📋</Text>
             <Text className={styles.emptyText}>暂无记录</Text>
           </View>
         )}
