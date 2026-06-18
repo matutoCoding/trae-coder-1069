@@ -1,0 +1,196 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding-bottom: 40rpx;
+}
+
+.header {
+  padding: $spacing-xl $page-padding;
+  background: linear-gradient(180deg, rgba(255, 107, 157, 0.2) 0%, transparent 100%);
+}
+
+.title {
+  font-size: 40rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-sm;
+}
+
+.subtitle {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.packageList {
+  padding: 0 $page-padding;
+}
+
+.packageCard {
+  background: $color-bg-card;
+  backdrop-filter: blur(20rpx);
+  border: 1rpx solid $color-border;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  margin-bottom: $spacing-lg;
+  transition: all $transition-base;
+
+  &.selected {
+    border-color: $color-primary-light;
+    box-shadow: 0 0 30rpx rgba(157, 78, 221, 0.3);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.imageContainer {
+  position: relative;
+  height: 300rpx;
+}
+
+.packageImage {
+  width: 100%;
+  height: 100%;
+}
+
+.tag {
+  position: absolute;
+  top: $spacing-md;
+  left: $spacing-md;
+  padding: 6rpx 20rpx;
+  background: linear-gradient(135deg, $color-primary 0%, $color-secondary 100%);
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  border-radius: $radius-sm;
+}
+
+.selectedBadge {
+  position: absolute;
+  top: $spacing-md;
+  right: $spacing-md;
+  padding: 6rpx 16rpx;
+  background: rgba(0, 255, 136, 0.2);
+  color: $color-neon-green;
+  border: 1rpx solid rgba(0, 255, 136, 0.4);
+  border-radius: $radius-sm;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+}
+
+.content {
+  padding: $spacing-lg;
+}
+
+.packageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-md;
+}
+
+.packageName {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.description {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+  margin-bottom: $spacing-lg;
+}
+
+.items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-lg;
+}
+
+.itemTag {
+  padding: 8rpx 20rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: $radius-xs;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: $spacing-md;
+  border-top: 1rpx solid $color-divider;
+}
+
+.priceSection {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-sm;
+}
+
+.price {
+  font-size: 48rpx;
+  font-weight: $font-weight-bold;
+  background: linear-gradient(135deg, $color-primary-light 0%, $color-secondary-light 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.originalPrice {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  text-decoration: line-through;
+}
+
+.discount {
+  padding: 4rpx 12rpx;
+  background: rgba(255, 107, 157, 0.15);
+  color: $color-secondary;
+  border-radius: $radius-xs;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+}
+
+.selectBtn {
+  @include button-reset;
+  padding: 0 $spacing-xl;
+  height: $button-height-md;
+  background: linear-gradient(135deg, $color-primary 0%, $color-secondary 100%);
+  border-radius: $radius-button;
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  transition: all $transition-base;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+
+  &.selected {
+    background: rgba(0, 255, 136, 0.15);
+    color: $color-neon-green;
+    border: 1rpx solid rgba(0, 255, 136, 0.4);
+  }
+}
+
+.emptyState {
+  text-align: center;
+  padding: $spacing-xxl $page-padding;
+}
+
+.emptyIcon {
+  font-size: 120rpx;
+  margin-bottom: $spacing-md;
+}
+
+.emptyText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}

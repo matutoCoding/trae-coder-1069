@@ -1,0 +1,45 @@
+// ============================================
+// 主题配色变量（第二阶段模型可修改此文件）
+// ============================================
+
+// 品牌主题色：KTV霓虹风格
+$color-primary: #9D4EDD;
+$color-primary-light: #C77DFF;
+$color-primary-dark: #7B2CBF;
+$color-secondary: #FF6B9D;
+$color-secondary-light: #FF85B3;
+
+// 霓虹辅助色
+$color-neon-blue: #00D4FF;
+$color-neon-gold: #FFD700;
+$color-neon-green: #00FF88;
+
+// 功能色
+$color-success: #00b42a;
+$color-warning: #ff7d00;
+$color-error: #FF4757;
+$color-info: #00D4FF;
+
+// 背景色
+$color-bg-page: #1A0B2E;
+$color-bg-card: rgba(255, 255, 255, 0.08);
+$color-bg-hover: rgba(255, 255, 255, 0.12);
+$color-bg-glass: rgba(255, 255, 255, 0.05);
+
+// 文本色
+$color-text-primary: #ffffff;
+$color-text-secondary: rgba(255, 255, 255, 0.7);
+$color-text-tertiary: rgba(255, 255, 255, 0.5);
+$color-text-disabled: rgba(255, 255, 255, 0.3);
+$color-text-white: #ffffff;
+
+// 边框色
+$color-border: rgba(255, 255, 255, 0.1);
+$color-divider: rgba(255, 255, 255, 0.05);
+
+// 业务状态色
+$color-status-available: #00D4FF;
+$color-status-booked: #9D4EDD;
+$color-status-waiting: #FFD700;
+$color-status-overcall: #FF4757;
+$color-status-using: #00FF88;

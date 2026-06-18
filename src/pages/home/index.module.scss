@@ -1,0 +1,174 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding-bottom: 120rpx;
+}
+
+.header {
+  padding: $spacing-xl $page-padding $spacing-lg;
+  background: linear-gradient(180deg, rgba(157, 78, 221, 0.3) 0%, transparent 100%);
+}
+
+.title {
+  font-size: 48rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-sm;
+  text-shadow: 0 0 30rpx rgba(157, 78, 221, 0.5);
+}
+
+.subtitle {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.filterSection {
+  padding: $spacing-lg $page-padding;
+}
+
+.filterTabs {
+  display: flex;
+  gap: $spacing-md;
+  margin-bottom: $spacing-lg;
+}
+
+.filterTab {
+  @include button-reset;
+  padding: 0 $spacing-xl;
+  height: $button-height-md;
+  background: $color-bg-card;
+  border: 1rpx solid $color-border;
+  border-radius: $radius-button;
+  color: $color-text-secondary;
+  font-size: $font-size-md;
+  transition: all $transition-base;
+
+  &.active {
+    background: linear-gradient(135deg, $color-primary 0%, $color-secondary 100%);
+    border-color: transparent;
+    color: $color-text-white;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.typeFilter {
+  display: flex;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+}
+
+.typeTag {
+  @include button-reset;
+  padding: 8rpx $spacing-lg;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid $color-border;
+  border-radius: $radius-md;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  transition: all $transition-base;
+
+  &.active {
+    background: rgba(157, 78, 221, 0.2);
+    border-color: $color-primary-light;
+    color: $color-primary-light;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.roomList {
+  padding: 0 $page-padding;
+}
+
+.sectionTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+}
+
+.statsBar {
+  display: flex;
+  justify-content: space-around;
+  padding: $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  margin: 0 $page-padding $spacing-lg;
+  border: 1rpx solid $color-border;
+}
+
+.statItem {
+  text-align: center;
+}
+
+.statValue {
+  display: block;
+  font-size: 40rpx;
+  font-weight: $font-weight-bold;
+  background: linear-gradient(135deg, $color-primary-light 0%, $color-secondary-light 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.statLabel {
+  display: block;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  margin-top: $spacing-xs;
+}
+
+.emptyState {
+  text-align: center;
+  padding: $spacing-xxl $page-padding;
+}
+
+.emptyIcon {
+  font-size: 120rpx;
+  margin-bottom: $spacing-md;
+}
+
+.emptyText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.quickActions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: $spacing-lg $page-padding;
+  background: rgba(26, 11, 46, 0.95);
+  backdrop-filter: blur(20rpx);
+  border-top: 1rpx solid $color-border;
+  display: flex;
+  gap: $spacing-md;
+}
+
+.quickBtn {
+  @include button-reset;
+  flex: 1;
+  height: $button-height-lg;
+  background: linear-gradient(135deg, $color-primary 0%, $color-secondary 100%);
+  border-radius: $radius-button;
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+
+  &.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1rpx solid $color-border;
+  }
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
