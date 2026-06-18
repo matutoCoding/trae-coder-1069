@@ -42,20 +42,40 @@ interface KtvState {
   checkTimeoutBookings: () => void;
 
   joinQueue: (roomType: string, peopleCount: number) => QueueItem | null;
+  cancelQueue: (queueId: string) => boolean;
   callNextNumber: () => QueueItem | null;
   confirmServed: (queueId: string) => boolean;
   handleOvercall: (queueId: string) => boolean;
   requeueOvercall: (queueId: string) => boolean;
 
   joinBackup: (roomType: string, peopleCount: number) => BackupItem | null;
+  cancelBackup: (backupId: string) => boolean;
   notifyBackup: (backupId: string) => boolean;
   confirmBackup: (backupId: string) => boolean;
+  checkExpiredBackups: () => void;
+  notifyNextBackupByType: (roomType: string) => void;
   processRoomRelease: (roomId: string) => void;
 
   getMyBookings: () => Booking[];
   getMyQueue: () => QueueItem | undefined;
   getMyBackup: () => BackupItem | undefined;
 }
+
+const roomTypeMap: Record<string, string> = {
+  'mini': '迷你包',
+  'small': '小包',
+  'medium': '中包',
+  'large': '大包',
+  'vip': 'VIP'
+};
+
+const roomTypeReverseMap: Record<string, string> = {
+  '迷你包': 'mini',
+  '小包': 'small',
+  '中包': 'medium',
+  '大包': 'large',
+  'VIP': 'vip'
+};
 
 export const useKtvStore = create<KtvState>((set, get) => ({
   rooms: mockRooms,
@@ -97,7 +117,7 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         peopleCount,
         startTime,
         endTime,
-        status: 'confirmed',
+        status: 'pending',
         packageId,
         packageName: selectedPkg?.name,
         totalPrice,
@@ -114,7 +134,7 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         currentBooking: newBooking
       }));
 
-      console.log('[Booking] 创建预订成功', { bookingId: newBooking.id });
+      console.log('[Booking] 创建预订成功', { bookingId: newBooking.id, status: 'pending' });
       return true;
     } catch (error) {
       console.error('[Booking] 创建预订失败', error);
@@ -172,7 +192,7 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         get().processRoomRelease(booking.roomId);
       });
 
-      console.log('[Booking] 超时自动释放', { count: timeoutBookings.length });
+      console.log('[Booking] 超时自动释放', { count: timeoutBookings.length, ids: timeoutBookings.map(b => b.id) });
     } catch (error) {
       console.error('[Booking] 超时检查失败', error);
     }
@@ -208,6 +228,24 @@ export const useKtvStore = create<KtvState>((set, get) => ({
     } catch (error) {
       console.error('[Queue] 加入排队失败', error);
       return null;
+    }
+  },
+
+  cancelQueue: (queueId) => {
+    try {
+      const { queue } = get();
+      const queueItem = queue.find(q => q.id === queueId);
+      if (!queueItem) return false;
+
+      set(state => ({
+        queue: state.queue.filter(q => q.id !== queueId)
+      }));
+
+      console.log('[Queue] 取消排队', { queueId, queueNumber: queueItem.queueNumber });
+      return true;
+    } catch (error) {
+      console.error('[Queue] 取消排队失败', error);
+      return false;
     }
   },
 
@@ -348,11 +386,61 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         backupList: [...state.backupList, newBackup]
       }));
 
-      console.log('[Backup] 加入候补成功', { backupId: newBackup.id });
+      console.log('[Backup] 加入候补成功', { backupId: newBackup.id, roomType });
       return newBackup;
     } catch (error) {
       console.error('[Backup] 加入候补失败', error);
       return null;
+    }
+  },
+
+  cancelBackup: (backupId) => {
+    try {
+      const { backupList } = get();
+      const backup = backupList.find(b => b.id === backupId);
+      if (!backup) return false;
+
+      set(state => ({
+        backupList: state.backupList.filter(b => b.id !== backupId)
+      }));
+
+      console.log('[Backup] 取消候补', { backupId, roomType: backup.roomType });
+      return true;
+    } catch (error) {
+      console.error('[Backup] 取消候补失败', error);
+      return false;
+    }
+  },
+
+  checkExpiredBackups: () => {
+    try {
+      const { backupList } = get();
+      const now = dayjs();
+      const expiredBackups = backupList.filter(
+        b => b.status === 'notified' && b.expiresAt && dayjs(b.expiresAt).isBefore(now)
+      );
+
+      if (expiredBackups.length === 0) return;
+
+      const expiredByType: Record<string, BackupItem[]> = {};
+      expiredBackups.forEach(b => {
+        if (!expiredByType[b.roomType]) {
+          expiredByType[b.roomType] = [];
+        }
+        expiredByType[b.roomType].push(b);
+      });
+
+      set(state => ({
+        backupList: state.backupList.filter(b => !expiredBackups.find(eb => eb.id === b.id))
+      }));
+
+      Object.keys(expiredByType).forEach(roomType => {
+        get().notifyNextBackupByType(roomType);
+      });
+
+      console.log('[Backup] 候补通知超时自动跳过', { count: expiredBackups.length });
+    } catch (error) {
+      console.error('[Backup] 检查超时候补失败', error);
     }
   },
 
@@ -397,20 +485,33 @@ export const useKtvStore = create<KtvState>((set, get) => ({
     }
   },
 
-  processRoomRelease: (roomId) => {
+  notifyNextBackupByType: (roomType) => {
     try {
-      const { backupList, rooms } = get();
-      const room = rooms.find(r => r.id === roomId);
-      if (!room) return;
-
+      const { backupList } = get();
       const waitingBackups = backupList.filter(
-        b => b.status === 'waiting' && b.roomType === room.type
+        b => b.status === 'waiting' && b.roomType === roomType
       ).sort((a, b) => dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf());
 
       if (waitingBackups.length > 0) {
         get().notifyBackup(waitingBackups[0].id);
-        console.log('[Backup] 包厢释放，通知候补', { roomId, backupId: waitingBackups[0].id });
+        console.log('[Backup] 通知下一位候补', { roomType, backupId: waitingBackups[0].id });
+      } else {
+        console.log('[Backup] 该类型无等待候补', { roomType });
       }
+    } catch (error) {
+      console.error('[Backup] 通知下一位候补失败', error);
+    }
+  },
+
+  processRoomRelease: (roomId) => {
+    try {
+      const { rooms } = get();
+      const room = rooms.find(r => r.id === roomId);
+      if (!room) return;
+
+      const roomTypeCN = roomTypeMap[room.type] || room.type;
+      get().notifyNextBackupByType(roomTypeCN);
+      console.log('[Backup] 包厢释放，通知候补', { roomId, roomType: room.type, roomTypeCN });
     } catch (error) {
       console.error('[Backup] 处理包厢释放失败', error);
     }

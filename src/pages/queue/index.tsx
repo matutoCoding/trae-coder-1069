@@ -11,6 +11,7 @@ const QueuePage: React.FC = () => {
     queue,
     getMyQueue,
     joinQueue,
+    cancelQueue,
     callNextNumber,
     confirmServed,
     handleOvercall,
@@ -68,16 +69,20 @@ const QueuePage: React.FC = () => {
   }, [requeueOvercall]);
 
   const handleCancel = useCallback(() => {
+    if (!myQueue) return;
     Taro.showModal({
       title: '取消排队',
       content: '确定要取消排队吗？',
       success: (res) => {
         if (res.confirm) {
-          Taro.showToast({ title: '已取消', icon: 'success' });
+          const success = cancelQueue(myQueue.id);
+          if (success) {
+            Taro.showToast({ title: '已取消', icon: 'success' });
+          }
         }
       }
     });
-  }, []);
+  }, [myQueue, cancelQueue]);
 
   const handleViewOvercall = () => {
     Taro.navigateTo({ url: '/pages/overcall/index' });

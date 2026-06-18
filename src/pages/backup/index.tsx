@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Button, ScrollView } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useDidShow } from '@tarojs/taro';
 import classnames from 'classnames';
 import styles from './index.module.scss';
 import { useKtvStore } from '@/store/useKtvStore';
@@ -8,7 +8,7 @@ import StatusBadge from '@/components/StatusBadge';
 import { getWaitTime, getCountdown } from '@/utils';
 
 const BackupPage: React.FC = () => {
-  const { backupList, getMyBackup, joinBackup, confirmBackup } = useKtvStore();
+  const { backupList, getMyBackup, joinBackup, cancelBackup, confirmBackup, checkExpiredBackups } = useKtvStore();
   const [selectedType, setSelectedType] = useState('中包');
   const [peopleCount, setPeopleCount] = useState(6);
   const [countdown, setCountdown] = useState({ minutes: 0, seconds: 0, expired: false });
@@ -18,6 +18,25 @@ const BackupPage: React.FC = () => {
 
   const roomTypes = ['迷你包', '小包', '中包', '大包', 'VIP'];
 
+  const getListPosition = (backupId: string, roomType: string) => {
+    const sameTypeList = backupList.filter(
+      b => b.status === 'waiting' && b.roomType === roomType
+    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const index = sameTypeList.findIndex(b => b.id === backupId);
+    return index >= 0 ? index + 1 : 0;
+  };
+
+  useEffect(() => {
+    const checkTimer = setInterval(() => {
+      checkExpiredBackups();
+    }, 10000);
+    return () => clearInterval(checkTimer);
+  }, [checkExpiredBackups]);
+
+  useDidShow(() => {
+    checkExpiredBackups();
+  });
+
   useEffect(() => {
     if (myBackup?.status === 'notified' && myBackup.expiresAt) {
       const timer = setInterval(() => {
@@ -25,11 +44,12 @@ const BackupPage: React.FC = () => {
         setCountdown(cd);
         if (cd.expired) {
           clearInterval(timer);
+          checkExpiredBackups();
         }
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [myBackup]);
+  }, [myBackup, checkExpiredBackups]);
 
   const handleJoinBackup = useCallback(() => {
     if (myBackup) {
@@ -62,22 +82,29 @@ const BackupPage: React.FC = () => {
   }, [myBackup, confirmBackup]);
 
   const handleCancel = useCallback(() => {
+    if (!myBackup) return;
     Taro.showModal({
       title: '取消候补',
       content: '确定要取消候补登记吗？',
       success: (res) => {
         if (res.confirm) {
-          Taro.showToast({ title: '已取消', icon: 'success' });
+          const success = cancelBackup(myBackup.id);
+          if (success) {
+            Taro.showToast({ title: '已取消', icon: 'success' });
+          }
         }
       }
     });
-  }, []);
+  }, [myBackup, cancelBackup]);
 
   const getPosition = (backupId: string) => {
+    const backupItem = backupList.find(b => b.id === backupId);
+    if (!backupItem) return 0;
     const sameTypeList = backupList.filter(
-      b => b.status === 'waiting' && b.id !== backupId
-    );
-    return sameTypeList.length + 1;
+      b => b.status === 'waiting' && b.roomType === backupItem.roomType
+    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const index = sameTypeList.findIndex(b => b.id === backupId);
+    return index >= 0 ? index + 1 : sameTypeList.length + 1;
   };
 
   return (

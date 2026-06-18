@@ -1,17 +1,22 @@
 import React, { useCallback } from 'react';
 import { View, Text, Button, Image, ScrollView } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useDidShow } from '@tarojs/taro';
 import classnames from 'classnames';
 import styles from './index.module.scss';
 import { useKtvStore } from '@/store/useKtvStore';
 import StatusBadge from '@/components/StatusBadge';
 
 const MinePage: React.FC = () => {
-  const { user, getMyBookings, getMyQueue, getMyBackup, cancelBooking, overcallRecords } = useKtvStore();
+  const { user, getMyBookings, getMyQueue, getMyBackup, cancelBooking, overcallRecords, checkTimeoutBookings, checkExpiredBackups } = useKtvStore();
 
   const myBookings = getMyBookings();
   const myQueue = getMyQueue();
   const myBackup = getMyBackup();
+
+  useDidShow(() => {
+    checkTimeoutBookings();
+    checkExpiredBackups();
+  });
 
   const handleCancelBooking = useCallback((bookingId: string) => {
     Taro.showModal({
@@ -124,7 +129,7 @@ const MinePage: React.FC = () => {
                     <Text className={styles.bookingPrice}>¥{booking.totalPrice}</Text>
                   </View>
                 </View>
-                {booking.status === 'confirmed' && (
+                {(booking.status === 'confirmed' || booking.status === 'pending') && (
                   <View className={styles.bookingActions}>
                     <Button className={classnames(styles.actionBtn, styles.secondaryBtn)}>
                       查看详情
