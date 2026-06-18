@@ -191,3 +191,84 @@
   color: $color-error;
   font-weight: $font-weight-medium;
 }
+
+.actionRow {
+  display: flex;
+  gap: $spacing-sm;
+  align-items: center;
+
+  .actionBtn {
+    flex: 1;
+  }
+}
+
+.staffToggle {
+  @include button-reset;
+  width: 80rpx;
+  height: $button-height-md;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1rpx solid $color-border;
+  border-radius: $radius-button;
+  font-size: 32rpx;
+  flex-shrink: 0;
+
+  &:active {
+    background: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.staffMenu {
+  margin-top: $spacing-md;
+  padding: $spacing-md;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1rpx solid rgba(157, 78, 221, 0.3);
+  border-radius: $radius-md;
+}
+
+.staffMenuTitle {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  margin-bottom: $spacing-sm;
+}
+
+.staffMenuGrid {
+  display: flex;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+}
+
+.staffBtn {
+  @include button-reset;
+  padding: 12rpx $spacing-lg;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.usingBtn {
+  background: rgba(0, 255, 136, 0.15);
+  color: $color-neon-green;
+  border: 1rpx solid rgba(0, 255, 136, 0.3);
+}
+
+.clearBtn {
+  background: rgba(0, 212, 255, 0.15);
+  color: $color-neon-blue;
+  border: 1rpx solid rgba(0, 212, 255, 0.3);
+}
+
+.maintBtn {
+  background: rgba(255, 125, 0, 0.15);
+  color: $color-warning;
+  border: 1rpx solid rgba(255, 125, 0, 0.3);
+}
+
+.restoreBtn {
+  background: rgba(157, 78, 221, 0.15);
+  color: $color-primary-light;
+  border: 1rpx solid rgba(157, 78, 221, 0.3);
+}

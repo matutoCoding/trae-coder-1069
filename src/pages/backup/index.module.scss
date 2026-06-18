@@ -179,6 +179,36 @@
   border: 1rpx solid rgba(255, 71, 87, 0.3);
 }
 
+.warningBtn {
+  background: rgba(255, 125, 0, 0.15);
+  color: $color-warning;
+  border: 1rpx solid rgba(255, 125, 0, 0.3);
+}
+
+.typeTabs {
+  display: flex;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+  margin-bottom: $spacing-md;
+}
+
+.typeTab {
+  @include button-reset;
+  padding: 8rpx $spacing-md;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid $color-border;
+  border-radius: $radius-md;
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+  transition: all $transition-base;
+
+  &.active {
+    background: rgba(157, 78, 221, 0.2);
+    border-color: $color-primary-light;
+    color: $color-primary-light;
+  }
+}
+
 .joinForm {
   padding: 0 $page-padding;
   margin-bottom: $spacing-lg;

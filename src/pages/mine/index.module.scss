@@ -262,6 +262,111 @@
   color: $color-text-tertiary;
 }
 
+.timeline {
+  margin-top: $spacing-md;
+}
+
+.timelineItem {
+  display: flex;
+  gap: $spacing-md;
+  padding-bottom: $spacing-lg;
+  position: relative;
+
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 14rpx;
+    top: 40rpx;
+    bottom: 0;
+    width: 2rpx;
+    background: $color-divider;
+  }
+}
+
+.timelineDot {
+  width: 30rpx;
+  height: 30rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 8rpx;
+  box-shadow: 0 0 16rpx rgba(157, 78, 221, 0.4);
+}
+
+.timelineContent {
+  flex: 1;
+  background: $color-bg-card;
+  border: 1rpx solid $color-border;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+}
+
+.timelineHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+}
+
+.timelineTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.timelineMeta {
+  margin-bottom: $spacing-xs;
+}
+
+.timelineMetaItem {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.warningText {
+  color: $color-warning;
+}
+
+.timelineTime {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex-wrap: wrap;
+  padding-top: $spacing-sm;
+  border-top: 1rpx solid $color-divider;
+  margin-top: $spacing-sm;
+}
+
+.timeLabel {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4rpx 12rpx;
+  border-radius: $radius-xs;
+}
+
+.timeValue {
+  font-size: $font-size-xs;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+}
+
+.timeSeparator {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.timeExpired {
+  color: $color-error;
+}
+
+.timelineActions {
+  display: flex;
+  gap: $spacing-md;
+  margin-top: $spacing-md;
+}
+
 .logoutBtn {
   @include button-reset;
   width: 100%;

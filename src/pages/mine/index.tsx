@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, Button, Image, ScrollView } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import classnames from 'classnames';
+import dayjs from 'dayjs';
 import styles from './index.module.scss';
 import { useKtvStore } from '@/store/useKtvStore';
 import StatusBadge from '@/components/StatusBadge';
@@ -26,14 +27,29 @@ const MinePage: React.FC = () => {
         if (res.confirm) {
           cancelBooking(bookingId);
           Taro.showToast({ title: '已取消', icon: 'success' });
-          console.log('[Mine] 取消预订', { bookingId });
         }
       }
     });
   }, [cancelBooking]);
 
-  const handleViewPackages = () => {
-    Taro.navigateTo({ url: '/pages/package/index' });
+  const formatTime = (time: string) => {
+    return dayjs(time).format('MM-DD HH:mm');
+  };
+
+  const getStatusColor = (status: string) => {
+    const map: Record<string, string> = {
+      pending: '#FF7D00',
+      confirmed: '#9D4EDD',
+      using: '#00FF88',
+      completed: '#00B42A',
+      cancelled: '#86909C',
+      timeout: '#FF4757',
+      waiting: '#FFD700',
+      calling: '#FF6B9D',
+      overcall: '#FF4757',
+      notified: '#FF6B9D'
+    };
+    return map[status] || '#86909C';
   };
 
   const handleViewOvercall = () => {
@@ -52,10 +68,6 @@ const MinePage: React.FC = () => {
     Taro.makePhoneCall({ phoneNumber: '400-123-4567' });
   };
 
-  const handleSetting = () => {
-    Taro.showToast({ title: '设置功能开发中', icon: 'none' });
-  };
-
   const handleLogout = () => {
     Taro.showModal({
       title: '退出登录',
@@ -67,16 +79,6 @@ const MinePage: React.FC = () => {
       }
     });
   };
-
-  const menuItems = [
-    { icon: '📋', name: '我的预订', desc: `${myBookings.length}条预订记录`, onClick: () => {} },
-    { icon: '🎫', name: '我的排队', desc: myQueue ? `号码: ${myQueue.queueNumber}` : '暂无排队', onClick: handleViewQueue },
-    { icon: '🔔', name: '我的候补', desc: myBackup ? '等待补位中' : '暂无候补', onClick: handleViewBackup },
-    { icon: '⚠️', name: '过号记录', desc: `${overcallRecords.length}条记录`, onClick: handleViewOvercall, badge: overcallRecords.length > 0 ? overcallRecords.length : null },
-    { icon: '🍺', name: '酒水套餐', desc: '查看优惠套餐', onClick: handleViewPackages },
-    { icon: '📞', name: '联系客服', desc: '400-123-4567', onClick: handleContact },
-    { icon: '⚙️', name: '设置', desc: '个性化设置', onClick: handleSetting }
-  ];
 
   return (
     <ScrollView scrollY className={styles.page}>
@@ -109,49 +111,52 @@ const MinePage: React.FC = () => {
       </View>
 
       <View className={styles.section}>
-        <Text className={styles.sectionTitle}>我的预订</Text>
+        <Text className={styles.sectionTitle}>📋 预订时间线</Text>
         {myBookings.length > 0 ? (
-          <View className={styles.bookingList}>
+          <View className={styles.timeline}>
             {myBookings.map(booking => (
-              <View key={booking.id} className={styles.bookingItem}>
-                <View className={styles.bookingHeader}>
-                  <View>
-                    <Text className={styles.bookingRoom}>{booking.roomName}</Text>
-                    <Text className={styles.bookingTime}>
-                      {booking.startTime} - {booking.endTime} · {booking.peopleCount}人
-                    </Text>
-                    {booking.packageName && (
-                      <Text className={styles.bookingPackage}>套餐：{booking.packageName}</Text>
-                    )}
-                  </View>
-                  <View style={{ textAlign: 'right' }}>
+              <View key={booking.id} className={styles.timelineItem}>
+                <View className={styles.timelineDot} style={{ background: getStatusColor(booking.status) }} />
+                <View className={styles.timelineContent}>
+                  <View className={styles.timelineHeader}>
+                    <Text className={styles.timelineTitle}>{booking.roomName}</Text>
                     <StatusBadge status={booking.status} />
-                    <Text className={styles.bookingPrice}>¥{booking.totalPrice}</Text>
                   </View>
+                  <View className={styles.timelineMeta}>
+                    <Text className={styles.timelineMetaItem}>
+                      📅 {booking.startTime} - {booking.endTime} · {booking.peopleCount}人
+                    </Text>
+                  </View>
+                  {booking.packageName && (
+                    <Text className={styles.timelineMetaItem}>🍺 {booking.packageName}</Text>
+                  )}
+                  <View className={styles.timelineTime}>
+                    <Text className={styles.timeLabel}>创建</Text>
+                    <Text className={styles.timeValue}>{formatTime(booking.createdAt)}</Text>
+                    {booking.timeoutAt && ['pending', 'timeout'].includes(booking.status) && (
+                      <>
+                        <Text className={styles.timeSeparator}>→</Text>
+                        <Text className={styles.timeLabel}>到店截止</Text>
+                        <Text className={classnames(styles.timeValue, booking.status === 'timeout' && styles.timeExpired)}>
+                          {formatTime(booking.timeoutAt)}
+                        </Text>
+                      </>
+                    )}
+                    <Text className={styles.timeSeparator}>→</Text>
+                    <Text className={styles.timeLabel}>金额</Text>
+                    <Text className={styles.timeValue}>¥{booking.totalPrice}</Text>
+                  </View>
+                  {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                    <View className={styles.timelineActions}>
+                      <Button
+                        className={classnames(styles.actionBtn, styles.dangerBtn)}
+                        onClick={() => handleCancelBooking(booking.id)}
+                      >
+                        取消预订
+                      </Button>
+                    </View>
+                  )}
                 </View>
-                {(booking.status === 'confirmed' || booking.status === 'pending') && (
-                  <View className={styles.bookingActions}>
-                    <Button className={classnames(styles.actionBtn, styles.secondaryBtn)}>
-                      查看详情
-                    </Button>
-                    <Button
-                      className={classnames(styles.actionBtn, styles.dangerBtn)}
-                      onClick={() => handleCancelBooking(booking.id)}
-                    >
-                      取消预订
-                    </Button>
-                  </View>
-                )}
-                {booking.status === 'using' && (
-                  <View className={styles.bookingActions}>
-                    <Button className={classnames(styles.actionBtn, styles.primaryBtn)}>
-                      加时/续单
-                    </Button>
-                    <Button className={classnames(styles.actionBtn, styles.secondaryBtn)}>
-                      服务呼叫
-                    </Button>
-                  </View>
-                )}
               </View>
             ))}
           </View>
@@ -164,21 +169,137 @@ const MinePage: React.FC = () => {
       </View>
 
       <View className={styles.section}>
+        <Text className={styles.sectionTitle}>🎫 排队状态</Text>
+        {myQueue ? (
+          <View className={styles.timeline}>
+            <View className={styles.timelineItem}>
+              <View className={styles.timelineDot} style={{ background: getStatusColor(myQueue.status) }} />
+              <View className={styles.timelineContent}>
+                <View className={styles.timelineHeader}>
+                  <Text className={styles.timelineTitle}>号码 {myQueue.queueNumber}</Text>
+                  <StatusBadge status={myQueue.status} />
+                </View>
+                <Text className={styles.timelineMetaItem}>
+                  {myQueue.roomType} · {myQueue.peopleCount}人
+                </Text>
+                {myQueue.overcallCount > 0 && (
+                  <Text className={classnames(styles.timelineMetaItem, styles.warningText)}>
+                    ⚠️ 已过号{myQueue.overcallCount}次
+                  </Text>
+                )}
+                <View className={styles.timelineTime}>
+                  <Text className={styles.timeLabel}>取号</Text>
+                  <Text className={styles.timeValue}>{formatTime(myQueue.createdAt)}</Text>
+                  {myQueue.calledAt && (
+                    <>
+                      <Text className={styles.timeSeparator}>→</Text>
+                      <Text className={styles.timeLabel}>叫号</Text>
+                      <Text className={styles.timeValue}>{formatTime(myQueue.calledAt)}</Text>
+                    </>
+                  )}
+                </View>
+                <View className={styles.timelineActions}>
+                  <Button className={classnames(styles.actionBtn, styles.primaryBtn)} onClick={handleViewQueue}>
+                    查看排队
+                  </Button>
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View className={styles.emptyState}>
+            <Text className={styles.emptyIcon}>🎫</Text>
+            <Text className={styles.emptyText}>暂无排队</Text>
+          </View>
+        )}
+      </View>
+
+      <View className={styles.section}>
+        <Text className={styles.sectionTitle}>🔔 候补状态</Text>
+        {myBackup ? (
+          <View className={styles.timeline}>
+            <View className={styles.timelineItem}>
+              <View className={styles.timelineDot} style={{ background: getStatusColor(myBackup.status) }} />
+              <View className={styles.timelineContent}>
+                <View className={styles.timelineHeader}>
+                  <Text className={styles.timelineTitle}>{myBackup.roomType}候补</Text>
+                  <StatusBadge status={myBackup.status} />
+                </View>
+                <Text className={styles.timelineMetaItem}>
+                  {myBackup.peopleCount}人
+                </Text>
+                <View className={styles.timelineTime}>
+                  <Text className={styles.timeLabel}>登记</Text>
+                  <Text className={styles.timeValue}>{formatTime(myBackup.createdAt)}</Text>
+                  {myBackup.notifiedAt && (
+                    <>
+                      <Text className={styles.timeSeparator}>→</Text>
+                      <Text className={styles.timeLabel}>通知</Text>
+                      <Text className={styles.timeValue}>{formatTime(myBackup.notifiedAt)}</Text>
+                    </>
+                  )}
+                  {myBackup.expiresAt && myBackup.status === 'notified' && (
+                    <>
+                      <Text className={styles.timeSeparator}>→</Text>
+                      <Text className={styles.timeLabel}>确认截止</Text>
+                      <Text className={styles.timeValue}>{formatTime(myBackup.expiresAt)}</Text>
+                    </>
+                  )}
+                </View>
+                <View className={styles.timelineActions}>
+                  <Button className={classnames(styles.actionBtn, styles.primaryBtn)} onClick={handleViewBackup}>
+                    查看候补
+                  </Button>
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View className={styles.emptyState}>
+            <Text className={styles.emptyIcon}>🔔</Text>
+            <Text className={styles.emptyText}>暂无候补</Text>
+          </View>
+        )}
+      </View>
+
+      <View className={styles.section}>
         <Text className={styles.sectionTitle}>功能菜单</Text>
         <View className={styles.menuList}>
-          {menuItems.map((item, index) => (
-            <View key={index} className={styles.menuItem} onClick={item.onClick}>
-              <View className={styles.menuIcon}>{item.icon}</View>
-              <View className={styles.menuContent}>
-                <Text className={styles.menuName}>{item.name}</Text>
-                <Text className={styles.menuDesc}>{item.desc}</Text>
-              </View>
-              {item.badge && (
-                <View className={styles.menuBadge}>{item.badge}</View>
-              )}
-              <Text className={styles.menuArrow}>›</Text>
+          <View className={styles.menuItem} onClick={handleViewQueue}>
+            <View className={styles.menuIcon}>🎫</View>
+            <View className={styles.menuContent}>
+              <Text className={styles.menuName}>我的排队</Text>
+              <Text className={styles.menuDesc}>{myQueue ? `号码: ${myQueue.queueNumber}` : '暂无排队'}</Text>
             </View>
-          ))}
+            <Text className={styles.menuArrow}>›</Text>
+          </View>
+          <View className={styles.menuItem} onClick={handleViewBackup}>
+            <View className={styles.menuIcon}>🔔</View>
+            <View className={styles.menuContent}>
+              <Text className={styles.menuName}>我的候补</Text>
+              <Text className={styles.menuDesc}>{myBackup ? '等待补位中' : '暂无候补'}</Text>
+            </View>
+            <Text className={styles.menuArrow}>›</Text>
+          </View>
+          <View className={styles.menuItem} onClick={handleViewOvercall}>
+            <View className={styles.menuIcon}>⚠️</View>
+            <View className={styles.menuContent}>
+              <Text className={styles.menuName}>过号记录</Text>
+              <Text className={styles.menuDesc}>{overcallRecords.length}条记录</Text>
+            </View>
+            {overcallRecords.length > 0 && (
+              <View className={styles.menuBadge}>{overcallRecords.length}</View>
+            )}
+            <Text className={styles.menuArrow}>›</Text>
+          </View>
+          <View className={styles.menuItem} onClick={handleContact}>
+            <View className={styles.menuIcon}>📞</View>
+            <View className={styles.menuContent}>
+              <Text className={styles.menuName}>联系客服</Text>
+              <Text className={styles.menuDesc}>400-123-4567</Text>
+            </View>
+            <Text className={styles.menuArrow}>›</Text>
+          </View>
         </View>
       </View>
 

@@ -10,7 +10,8 @@ import type {
   OvercallRecord,
   BookingStatus,
   QueueStatus,
-  BackupStatus
+  BackupStatus,
+  RoomStatus
 } from '@/types/ktv';
 import {
   mockRooms,
@@ -21,6 +22,14 @@ import {
   mockUser,
   mockOvercallRecords
 } from '@/data/mockData';
+
+const roomTypeMap: Record<string, string> = {
+  'mini': '迷你包',
+  'small': '小包',
+  'medium': '中包',
+  'large': '大包',
+  'vip': 'VIP'
+};
 
 interface KtvState {
   rooms: Room[];
@@ -41,6 +50,9 @@ interface KtvState {
   cancelBooking: (bookingId: string) => boolean;
   checkTimeoutBookings: () => void;
 
+  updateRoomStatus: (roomId: string, status: RoomStatus) => boolean;
+  clearRoom: (roomId: string) => boolean;
+
   joinQueue: (roomType: string, peopleCount: number) => QueueItem | null;
   cancelQueue: (queueId: string) => boolean;
   callNextNumber: () => QueueItem | null;
@@ -50,8 +62,8 @@ interface KtvState {
 
   joinBackup: (roomType: string, peopleCount: number) => BackupItem | null;
   cancelBackup: (backupId: string) => boolean;
-  notifyBackup: (backupId: string) => boolean;
-  confirmBackup: (backupId: string) => boolean;
+  acceptBackup: (backupId: string) => boolean;
+  declineBackup: (backupId: string) => boolean;
   checkExpiredBackups: () => void;
   notifyNextBackupByType: (roomType: string) => void;
   processRoomRelease: (roomId: string) => void;
@@ -59,23 +71,8 @@ interface KtvState {
   getMyBookings: () => Booking[];
   getMyQueue: () => QueueItem | undefined;
   getMyBackup: () => BackupItem | undefined;
+  getBackupPositionByType: (roomType: string, backupId: string) => number;
 }
-
-const roomTypeMap: Record<string, string> = {
-  'mini': '迷你包',
-  'small': '小包',
-  'medium': '中包',
-  'large': '大包',
-  'vip': 'VIP'
-};
-
-const roomTypeReverseMap: Record<string, string> = {
-  '迷你包': 'mini',
-  '小包': 'small',
-  '中包': 'medium',
-  '大包': 'large',
-  'VIP': 'vip'
-};
 
 export const useKtvStore = create<KtvState>((set, get) => ({
   rooms: mockRooms,
@@ -96,10 +93,7 @@ export const useKtvStore = create<KtvState>((set, get) => ({
     try {
       const { rooms, user, packages } = get();
       const room = rooms.find(r => r.id === roomId);
-      if (!room || room.status !== 'available') {
-        console.error('[Booking] 包厢不可用', { roomId });
-        return false;
-      }
+      if (!room || room.status !== 'available') return false;
 
       const selectedPkg = packageId ? packages.find(p => p.id === packageId) : undefined;
       const hours = dayjs(endTime, 'HH:mm').diff(dayjs(startTime, 'HH:mm'), 'hour');
@@ -129,15 +123,14 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       set(state => ({
         bookings: [...state.bookings, newBooking],
         rooms: state.rooms.map(r =>
-          r.id === roomId ? { ...r, status: 'booked', currentBooking: newBooking } : r
+          r.id === roomId ? { ...r, status: 'booked' as RoomStatus, currentBooking: newBooking } : r
         ),
         currentBooking: newBooking
       }));
 
-      console.log('[Booking] 创建预订成功', { bookingId: newBooking.id, status: 'pending' });
       return true;
     } catch (error) {
-      console.error('[Booking] 创建预订失败', error);
+      console.error('[Booking] 创建失败', error);
       return false;
     }
   },
@@ -153,15 +146,14 @@ export const useKtvStore = create<KtvState>((set, get) => ({
           b.id === bookingId ? { ...b, status: 'cancelled' as BookingStatus } : b
         ),
         rooms: state.rooms.map(r =>
-          r.id === booking.roomId ? { ...r, status: 'available', currentBooking: undefined } : r
+          r.id === booking.roomId ? { ...r, status: 'available' as RoomStatus, currentBooking: undefined } : r
         )
       }));
 
       get().processRoomRelease(booking.roomId);
-      console.log('[Booking] 取消预订成功', { bookingId });
       return true;
     } catch (error) {
-      console.error('[Booking] 取消预订失败', error);
+      console.error('[Booking] 取消失败', error);
       return false;
     }
   },
@@ -173,7 +165,6 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       const timeoutBookings = bookings.filter(
         b => b.status === 'pending' && b.timeoutAt && dayjs(b.timeoutAt).isBefore(now)
       );
-
       if (timeoutBookings.length === 0) return;
 
       set(state => ({
@@ -184,17 +175,91 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         ),
         rooms: state.rooms.map(r => {
           const timeoutBooking = timeoutBookings.find(tb => tb.roomId === r.id);
-          return timeoutBooking ? { ...r, status: 'available', currentBooking: undefined } : r;
+          return timeoutBooking ? { ...r, status: 'available' as RoomStatus, currentBooking: undefined } : r;
         })
       }));
 
       timeoutBookings.forEach(booking => {
         get().processRoomRelease(booking.roomId);
       });
-
-      console.log('[Booking] 超时自动释放', { count: timeoutBookings.length, ids: timeoutBookings.map(b => b.id) });
     } catch (error) {
       console.error('[Booking] 超时检查失败', error);
+    }
+  },
+
+  updateRoomStatus: (roomId, status) => {
+    try {
+      const { rooms, bookings } = get();
+      const room = rooms.find(r => r.id === roomId);
+      if (!room) return false;
+
+      set(state => ({
+        rooms: state.rooms.map(r =>
+          r.id === roomId ? { ...r, status } : r
+        ),
+        bookings: status === 'using'
+          ? state.bookings.map(b =>
+              b.roomId === roomId && b.status === 'pending'
+                ? { ...b, status: 'using' as BookingStatus }
+                : b
+            )
+          : state.bookings
+      }));
+
+      if (status === 'using') {
+        const pendingBooking = bookings.find(b => b.roomId === roomId && b.status === 'pending');
+        if (pendingBooking) {
+          set(state => ({
+            rooms: state.rooms.map(r =>
+              r.id === roomId ? { ...r, currentBooking: { ...pendingBooking, status: 'using' as BookingStatus } } : r
+            )
+          }));
+        }
+      }
+
+      if (status === 'available') {
+        set(state => ({
+          rooms: state.rooms.map(r =>
+            r.id === roomId ? { ...r, currentBooking: undefined } : r
+          )
+        }));
+      }
+
+      console.log('[Room] 状态变更', { roomId, status });
+      return true;
+    } catch (error) {
+      console.error('[Room] 状态变更失败', error);
+      return false;
+    }
+  },
+
+  clearRoom: (roomId) => {
+    try {
+      const { rooms, bookings } = get();
+      const room = rooms.find(r => r.id === roomId);
+      if (!room) return false;
+
+      const activeBooking = bookings.find(b =>
+        b.roomId === roomId && ['pending', 'confirmed', 'using'].includes(b.status)
+      );
+
+      set(state => ({
+        rooms: state.rooms.map(r =>
+          r.id === roomId ? { ...r, status: 'available' as RoomStatus, currentBooking: undefined } : r
+        ),
+        bookings: activeBooking
+          ? state.bookings.map(b =>
+              b.id === activeBooking.id ? { ...b, status: 'completed' as BookingStatus } : b
+            )
+          : state.bookings
+      }));
+
+      get().processRoomRelease(roomId);
+      console.log('[Room] 清台完成', { roomId });
+      return true;
+    } catch (error) {
+      console.error('[Room] 清台失败', error);
+      return false;
     }
   },
 
@@ -223,10 +288,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         currentQueueItem: newQueueItem
       }));
 
-      console.log('[Queue] 加入排队成功', { queueNumber });
       return newQueueItem;
     } catch (error) {
-      console.error('[Queue] 加入排队失败', error);
+      console.error('[Queue] 加入失败', error);
       return null;
     }
   },
@@ -241,10 +305,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         queue: state.queue.filter(q => q.id !== queueId)
       }));
 
-      console.log('[Queue] 取消排队', { queueId, queueNumber: queueItem.queueNumber });
       return true;
     } catch (error) {
-      console.error('[Queue] 取消排队失败', error);
+      console.error('[Queue] 取消失败', error);
       return false;
     }
   },
@@ -255,11 +318,7 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       const waitingItems = queue.filter(q => q.status === 'waiting').sort((a, b) =>
         dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf()
       );
-
-      if (waitingItems.length === 0) {
-        console.log('[Queue] 没有等待的号码');
-        return null;
-      }
+      if (waitingItems.length === 0) return null;
 
       const nextItem = waitingItems[0];
       set(state => ({
@@ -268,7 +327,6 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         )
       }));
 
-      console.log('[Queue] 叫号成功', { queueNumber: nextItem.queueNumber });
       return { ...nextItem, status: 'calling' as QueueStatus, calledAt: dayjs().format() };
     } catch (error) {
       console.error('[Queue] 叫号失败', error);
@@ -278,17 +336,11 @@ export const useKtvStore = create<KtvState>((set, get) => ({
 
   confirmServed: (queueId) => {
     try {
-      const { queue } = get();
-      const queueItem = queue.find(q => q.id === queueId);
-      if (!queueItem) return false;
-
       set(state => ({
         queue: state.queue.map(q =>
           q.id === queueId ? { ...q, status: 'served' as QueueStatus } : q
         )
       }));
-
-      console.log('[Queue] 确认入座', { queueNumber: queueItem.queueNumber });
       return true;
     } catch (error) {
       console.error('[Queue] 确认入座失败', error);
@@ -315,23 +367,14 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         status: isCancelled ? 'cancelled' : 'requeued'
       };
 
-      if (isCancelled) {
-        set(state => ({
-          queue: state.queue.map(q =>
-            q.id === queueId ? { ...q, status: 'cancelled' as QueueStatus, overcallCount: newOvercallCount } : q
-          ),
-          overcallRecords: [overcallRecord, ...state.overcallRecords]
-        }));
-        console.log('[Queue] 连续过号2次，作废处理', { queueNumber: queueItem.queueNumber });
-      } else {
-        set(state => ({
-          queue: state.queue.map(q =>
-            q.id === queueId ? { ...q, status: 'overcall' as QueueStatus, overcallCount: newOvercallCount } : q
-          ),
-          overcallRecords: [overcallRecord, ...state.overcallRecords]
-        }));
-        console.log('[Queue] 过号处理', { queueNumber: queueItem.queueNumber, overcallCount: newOvercallCount });
-      }
+      set(state => ({
+        queue: state.queue.map(q =>
+          q.id === queueId
+            ? { ...q, status: (isCancelled ? 'cancelled' : 'overcall') as QueueStatus, overcallCount: newOvercallCount }
+            : q
+        ),
+        overcallRecords: [overcallRecord, ...state.overcallRecords]
+      }));
 
       return true;
     } catch (error) {
@@ -354,12 +397,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
           createdAt: dayjs().format(),
           overcallCount: queueItem.overcallCount
         };
-        return {
-          queue: [...newQueue, requeuedItem]
-        };
+        return { queue: [...newQueue, requeuedItem] };
       });
 
-      console.log('[Queue] 过号重排队尾', { queueNumber: queueItem.queueNumber });
       return true;
     } catch (error) {
       console.error('[Queue] 重排失败', error);
@@ -370,7 +410,6 @@ export const useKtvStore = create<KtvState>((set, get) => ({
   joinBackup: (roomType, peopleCount) => {
     try {
       const { user } = get();
-
       const newBackup: BackupItem = {
         id: `backup-${Date.now()}`,
         userId: user.id,
@@ -386,10 +425,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         backupList: [...state.backupList, newBackup]
       }));
 
-      console.log('[Backup] 加入候补成功', { backupId: newBackup.id, roomType });
       return newBackup;
     } catch (error) {
-      console.error('[Backup] 加入候补失败', error);
+      console.error('[Backup] 加入失败', error);
       return null;
     }
   },
@@ -400,14 +438,91 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       const backup = backupList.find(b => b.id === backupId);
       if (!backup) return false;
 
+      const roomType = backup.roomType;
+
       set(state => ({
         backupList: state.backupList.filter(b => b.id !== backupId)
       }));
 
-      console.log('[Backup] 取消候补', { backupId, roomType: backup.roomType });
+      console.log('[Backup] 取消候补', { backupId, roomType });
       return true;
     } catch (error) {
-      console.error('[Backup] 取消候补失败', error);
+      console.error('[Backup] 取消失败', error);
+      return false;
+    }
+  },
+
+  acceptBackup: (backupId) => {
+    try {
+      const { backupList, rooms } = get();
+      const backup = backupList.find(b => b.id === backupId);
+      if (!backup || backup.status !== 'notified') return false;
+
+      const roomTypeEN = Object.entries(roomTypeMap).find(([, v]) => v === backup.roomType)?.[0];
+      const availableRoom = rooms.find(r => r.type === roomTypeEN && r.status === 'available');
+
+      if (!availableRoom) {
+        set(state => ({
+          backupList: state.backupList.filter(b => b.id !== backupId)
+        }));
+        get().notifyNextBackupByType(backup.roomType);
+        console.log('[Backup] 接受补位但无可用包厢', { backupId });
+        return false;
+      }
+
+      const now = dayjs();
+      const newBooking: Booking = {
+        id: `booking-${Date.now()}`,
+        roomId: availableRoom.id,
+        roomName: availableRoom.name,
+        userId: backup.userId,
+        userName: backup.userName,
+        phone: backup.phone,
+        peopleCount: backup.peopleCount,
+        startTime: now.format('HH:mm'),
+        endTime: now.add(3, 'hour').format('HH:mm'),
+        status: 'pending',
+        totalPrice: availableRoom.pricePerHour * 3,
+        createdAt: now.format(),
+        timeoutAt: now.add(15, 'minute').format(),
+        overcallCount: 0
+      };
+
+      set(state => ({
+        backupList: state.backupList.filter(b => b.id !== backupId),
+        bookings: [...state.bookings, newBooking],
+        rooms: state.rooms.map(r =>
+          r.id === availableRoom.id
+            ? { ...r, status: 'booked' as RoomStatus, currentBooking: newBooking }
+            : r
+        )
+      }));
+
+      console.log('[Backup] 接受补位，生成预订', { backupId, bookingId: newBooking.id, roomId: availableRoom.id });
+      return true;
+    } catch (error) {
+      console.error('[Backup] 接受失败', error);
+      return false;
+    }
+  },
+
+  declineBackup: (backupId) => {
+    try {
+      const { backupList } = get();
+      const backup = backupList.find(b => b.id === backupId);
+      if (!backup) return false;
+
+      const roomType = backup.roomType;
+
+      set(state => ({
+        backupList: state.backupList.filter(b => b.id !== backupId)
+      }));
+
+      get().notifyNextBackupByType(roomType);
+      console.log('[Backup] 放弃补位，顺延下一位', { backupId, roomType });
+      return true;
+    } catch (error) {
+      console.error('[Backup] 放弃失败', error);
       return false;
     }
   },
@@ -419,15 +534,12 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       const expiredBackups = backupList.filter(
         b => b.status === 'notified' && b.expiresAt && dayjs(b.expiresAt).isBefore(now)
       );
-
       if (expiredBackups.length === 0) return;
 
-      const expiredByType: Record<string, BackupItem[]> = {};
+      const expiredByType: Record<string, string[]> = {};
       expiredBackups.forEach(b => {
-        if (!expiredByType[b.roomType]) {
-          expiredByType[b.roomType] = [];
-        }
-        expiredByType[b.roomType].push(b);
+        if (!expiredByType[b.roomType]) expiredByType[b.roomType] = [];
+        expiredByType[b.roomType].push(b.id);
       });
 
       set(state => ({
@@ -438,9 +550,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
         get().notifyNextBackupByType(roomType);
       });
 
-      console.log('[Backup] 候补通知超时自动跳过', { count: expiredBackups.length });
+      console.log('[Backup] 候补超时自动跳过', { count: expiredBackups.length });
     } catch (error) {
-      console.error('[Backup] 检查超时候补失败', error);
+      console.error('[Backup] 超时检查失败', error);
     }
   },
 
@@ -456,31 +568,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
           } : b
         )
       }));
-
-      console.log('[Backup] 通知补位', { backupId });
       return true;
     } catch (error) {
       console.error('[Backup] 通知失败', error);
-      return false;
-    }
-  },
-
-  confirmBackup: (backupId) => {
-    try {
-      const { backupList } = get();
-      const backup = backupList.find(b => b.id === backupId);
-      if (!backup) return false;
-
-      set(state => ({
-        backupList: state.backupList.map(b =>
-          b.id === backupId ? { ...b, status: 'confirmed' as BackupStatus } : b
-        )
-      }));
-
-      console.log('[Backup] 确认补位', { backupId });
-      return true;
-    } catch (error) {
-      console.error('[Backup] 确认失败', error);
       return false;
     }
   },
@@ -494,12 +584,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
 
       if (waitingBackups.length > 0) {
         get().notifyBackup(waitingBackups[0].id);
-        console.log('[Backup] 通知下一位候补', { roomType, backupId: waitingBackups[0].id });
-      } else {
-        console.log('[Backup] 该类型无等待候补', { roomType });
       }
     } catch (error) {
-      console.error('[Backup] 通知下一位候补失败', error);
+      console.error('[Backup] 通知下一位失败', error);
     }
   },
 
@@ -508,12 +595,10 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       const { rooms } = get();
       const room = rooms.find(r => r.id === roomId);
       if (!room) return;
-
       const roomTypeCN = roomTypeMap[room.type] || room.type;
       get().notifyNextBackupByType(roomTypeCN);
-      console.log('[Backup] 包厢释放，通知候补', { roomId, roomType: room.type, roomTypeCN });
     } catch (error) {
-      console.error('[Backup] 处理包厢释放失败', error);
+      console.error('[Backup] 包厢释放处理失败', error);
     }
   },
 
@@ -530,5 +615,14 @@ export const useKtvStore = create<KtvState>((set, get) => ({
   getMyBackup: () => {
     const { backupList, user } = get();
     return backupList.find(b => b.userId === user.id && ['waiting', 'notified'].includes(b.status));
+  },
+
+  getBackupPositionByType: (roomType, backupId) => {
+    const { backupList } = get();
+    const sameTypeList = backupList.filter(
+      b => b.status === 'waiting' && b.roomType === roomType
+    ).sort((a, b) => dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf());
+    const index = sameTypeList.findIndex(b => b.id === backupId);
+    return index >= 0 ? index + 1 : 0;
   }
 }));

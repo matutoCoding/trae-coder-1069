@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, Button, ScrollView } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import classnames from 'classnames';
@@ -7,24 +7,32 @@ import { useKtvStore } from '@/store/useKtvStore';
 import StatusBadge from '@/components/StatusBadge';
 import { getWaitTime, getCountdown } from '@/utils';
 
+const ROOM_TYPES = ['迷你包', '小包', '中包', '大包', 'VIP'] as const;
+
 const BackupPage: React.FC = () => {
-  const { backupList, getMyBackup, joinBackup, cancelBackup, confirmBackup, checkExpiredBackups } = useKtvStore();
-  const [selectedType, setSelectedType] = useState('中包');
+  const { backupList, getMyBackup, joinBackup, cancelBackup, acceptBackup, declineBackup, checkExpiredBackups, getBackupPositionByType } = useKtvStore();
+  const [selectedType, setSelectedType] = useState<string>('中包');
   const [peopleCount, setPeopleCount] = useState(6);
   const [countdown, setCountdown] = useState({ minutes: 0, seconds: 0, expired: false });
+  const [activeTypeTab, setActiveTypeTab] = useState<string>('全部');
 
   const myBackup = getMyBackup();
-  const waitingBackups = backupList.filter(b => b.status === 'waiting');
 
-  const roomTypes = ['迷你包', '小包', '中包', '大包', 'VIP'];
+  const backupsByType = useMemo(() => {
+    const grouped: Record<string, typeof backupList> = {};
+    ROOM_TYPES.forEach(t => { grouped[t] = []; });
+    backupList.filter(b => ['waiting', 'notified'].includes(b.status)).forEach(b => {
+      if (grouped[b.roomType]) grouped[b.roomType].push(b);
+    });
+    return grouped;
+  }, [backupList]);
 
-  const getListPosition = (backupId: string, roomType: string) => {
-    const sameTypeList = backupList.filter(
-      b => b.status === 'waiting' && b.roomType === roomType
-    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    const index = sameTypeList.findIndex(b => b.id === backupId);
-    return index >= 0 ? index + 1 : 0;
-  };
+  const displayedBackups = useMemo(() => {
+    if (activeTypeTab === '全部') {
+      return backupList.filter(b => ['waiting', 'notified'].includes(b.status));
+    }
+    return backupsByType[activeTypeTab] || [];
+  }, [backupList, backupsByType, activeTypeTab]);
 
   useEffect(() => {
     const checkTimer = setInterval(() => {
@@ -59,27 +67,42 @@ const BackupPage: React.FC = () => {
     const result = joinBackup(selectedType, peopleCount);
     if (result) {
       Taro.showToast({ title: '候补登记成功', icon: 'success' });
-      console.log('[Backup] 候补登记成功', { backupId: result.id });
     } else {
       Taro.showToast({ title: '登记失败，请重试', icon: 'none' });
     }
   }, [myBackup, selectedType, peopleCount, joinBackup]);
 
-  const handleConfirm = useCallback(() => {
+  const handleAccept = useCallback(() => {
     if (!myBackup) return;
     Taro.showModal({
-      title: '确认补位',
-      content: '确认接受补位并前往包厢？',
+      title: '接受补位',
+      content: '确认接受补位？将为您生成待到店预订，请在15分钟内到店',
       success: (res) => {
         if (res.confirm) {
-          confirmBackup(myBackup.id);
-          Taro.showToast({ title: '已确认，请尽快到店', icon: 'success' });
-          console.log('[Backup] 确认补位', { backupId: myBackup.id });
-          Taro.switchTab({ url: '/pages/queue/index' });
+          const success = acceptBackup(myBackup.id);
+          if (success) {
+            Taro.showToast({ title: '已接受，请尽快到店', icon: 'success' });
+          } else {
+            Taro.showToast({ title: '抱歉，该类型暂无可用包厢', icon: 'none' });
+          }
         }
       }
     });
-  }, [myBackup, confirmBackup]);
+  }, [myBackup, acceptBackup]);
+
+  const handleDecline = useCallback(() => {
+    if (!myBackup) return;
+    Taro.showModal({
+      title: '放弃补位',
+      content: '确定放弃本次补位机会？将顺延给下一位候补',
+      success: (res) => {
+        if (res.confirm) {
+          declineBackup(myBackup.id);
+          Taro.showToast({ title: '已放弃', icon: 'success' });
+        }
+      }
+    });
+  }, [myBackup, declineBackup]);
 
   const handleCancel = useCallback(() => {
     if (!myBackup) return;
@@ -88,24 +111,14 @@ const BackupPage: React.FC = () => {
       content: '确定要取消候补登记吗？',
       success: (res) => {
         if (res.confirm) {
-          const success = cancelBackup(myBackup.id);
-          if (success) {
-            Taro.showToast({ title: '已取消', icon: 'success' });
-          }
+          cancelBackup(myBackup.id);
+          Taro.showToast({ title: '已取消', icon: 'success' });
         }
       }
     });
   }, [myBackup, cancelBackup]);
 
-  const getPosition = (backupId: string) => {
-    const backupItem = backupList.find(b => b.id === backupId);
-    if (!backupItem) return 0;
-    const sameTypeList = backupList.filter(
-      b => b.status === 'waiting' && b.roomType === backupItem.roomType
-    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    const index = sameTypeList.findIndex(b => b.id === backupId);
-    return index >= 0 ? index + 1 : sameTypeList.length + 1;
-  };
+  const myPosition = myBackup ? getBackupPositionByType(myBackup.roomType, myBackup.id) : 0;
 
   return (
     <ScrollView scrollY className={styles.page}>
@@ -119,10 +132,11 @@ const BackupPage: React.FC = () => {
       <View className={styles.tips}>
         <Text className={styles.tipsTitle}>候补须知</Text>
         <View className={styles.tipsContent}>
-          <Text className={styles.tipsItem}>• 候补登记后请保持手机畅通</Text>
+          <Text className={styles.tipsItem}>• 候补按包厢类型各自排队，互不影响</Text>
           <Text className={styles.tipsItem}>• 包厢释放后将按候补顺序通知</Text>
-          <Text className={styles.tipsItem}>• 收到通知后10分钟内确认有效</Text>
-          <Text className={styles.tipsItem}>• 超时未确认将自动顺延至下一位</Text>
+          <Text className={styles.tipsItem}>• 收到通知后10分钟内接受或放弃</Text>
+          <Text className={styles.tipsItem}>• 接受后生成待到店预订，15分钟内需到店</Text>
+          <Text className={styles.tipsItem}>• 放弃或超时自动顺延给同类型下一位</Text>
         </View>
       </View>
 
@@ -141,7 +155,7 @@ const BackupPage: React.FC = () => {
             <View className={styles.waitTimeSection}>
               <Text className={styles.waitLabel}>等待时间</Text>
               <Text className={styles.waitValue}>{getWaitTime(myBackup.createdAt)}</Text>
-              <Text className={styles.position}>队列第{getPosition(myBackup.id)}位</Text>
+              <Text className={styles.position}>{myBackup.roomType}第{myPosition}位</Text>
             </View>
 
             {myBackup.status === 'notified' && !countdown.expired && (
@@ -153,15 +167,29 @@ const BackupPage: React.FC = () => {
               </View>
             )}
 
+            {myBackup.status === 'notified' && countdown.expired && (
+              <View className={styles.countdownSection}>
+                <Text className={styles.countdownTitle}>⏰ 确认时间已过</Text>
+                <Text className={styles.countdownTime}>已超时</Text>
+              </View>
+            )}
+
             <View className={styles.actions}>
               {myBackup.status === 'notified' && !countdown.expired && (
-                <Button className={classnames(styles.actionBtn, styles.primaryBtn)} onClick={handleConfirm}>
-                  立即确认
+                <Button className={classnames(styles.actionBtn, styles.primaryBtn)} onClick={handleAccept}>
+                  接受补位
                 </Button>
               )}
-              <Button className={classnames(styles.actionBtn, styles.dangerBtn)} onClick={handleCancel}>
-                取消候补
-              </Button>
+              {myBackup.status === 'notified' && !countdown.expired && (
+                <Button className={classnames(styles.actionBtn, styles.warningBtn)} onClick={handleDecline}>
+                  放弃
+                </Button>
+              )}
+              {myBackup.status === 'waiting' && (
+                <Button className={classnames(styles.actionBtn, styles.dangerBtn)} onClick={handleCancel}>
+                  取消候补
+                </Button>
+              )}
             </View>
           </View>
         </View>
@@ -172,7 +200,7 @@ const BackupPage: React.FC = () => {
             <View className={styles.formRow}>
               <Text className={styles.formLabel}>包厢类型</Text>
               <View className={styles.typeSelector}>
-                {roomTypes.map(type => (
+                {ROOM_TYPES.map(type => (
                   <Button
                     key={type}
                     className={classnames(styles.typeOption, selectedType === type && styles.active)}
@@ -211,25 +239,49 @@ const BackupPage: React.FC = () => {
       <View className={styles.backupList}>
         <View className={styles.listHeader}>
           <Text className={styles.listTitle}>候补队列</Text>
-          <Text className={styles.listCount}>共{waitingBackups.length}人</Text>
+          <Text className={styles.listCount}>共{displayedBackups.length}人</Text>
         </View>
 
-        {waitingBackups.length > 0 ? (
-          waitingBackups.map((item, index) => (
-            <View key={item.id} className={classnames(styles.backupItem, item.status === 'notified' && styles.notified)}>
-              <View className={styles.itemHeader}>
-                <Text className={styles.itemRoom}>{item.roomType}</Text>
-                <StatusBadge status={item.status} />
+        <View className={styles.typeTabs}>
+          <Button
+            className={classnames(styles.typeTab, activeTypeTab === '全部' && styles.active)}
+            onClick={() => setActiveTypeTab('全部')}
+          >
+            全部
+          </Button>
+          {ROOM_TYPES.map(type => {
+            const count = (backupsByType[type] || []).length;
+            return (
+              <Button
+                key={type}
+                className={classnames(styles.typeTab, activeTypeTab === type && styles.active)}
+                onClick={() => setActiveTypeTab(type)}
+              >
+                {type}({count})
+              </Button>
+            );
+          })}
+        </View>
+
+        {displayedBackups.length > 0 ? (
+          displayedBackups.map((item) => {
+            const pos = getBackupPositionByType(item.roomType, item.id);
+            return (
+              <View key={item.id} className={classnames(styles.backupItem, item.status === 'notified' && styles.notified)}>
+                <View className={styles.itemHeader}>
+                  <Text className={styles.itemRoom}>{item.roomType}</Text>
+                  <StatusBadge status={item.status} />
+                </View>
+                <Text className={styles.itemInfo}>
+                  {item.userName} · {item.peopleCount}人
+                </Text>
+                <View className={styles.itemMeta}>
+                  <Text className={styles.metaText}>等待 {getWaitTime(item.createdAt)}</Text>
+                  <Text className={styles.metaText}>{item.roomType}第{pos}位</Text>
+                </View>
               </View>
-              <Text className={styles.itemInfo}>
-                {item.userName} · {item.peopleCount}人
-              </Text>
-              <View className={styles.itemMeta}>
-                <Text className={styles.metaText}>等待 {getWaitTime(item.createdAt)}</Text>
-                <Text className={styles.metaText}>第{index + 1}位</Text>
-              </View>
-            </View>
-          ))
+            );
+          })
         ) : (
           <View className={styles.emptyState}>
             <Text className={styles.emptyIcon}>✨</Text>
