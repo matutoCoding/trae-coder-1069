@@ -48,6 +48,7 @@ interface KtvState {
 
   createBooking: (roomId: string, startTime: string, endTime: string, peopleCount: number, packageId?: string) => Promise<boolean>;
   cancelBooking: (bookingId: string) => boolean;
+  checkinBooking: (bookingId: string) => boolean;
   checkTimeoutBookings: () => void;
 
   updateRoomStatus: (roomId: string, status: RoomStatus) => boolean;
@@ -71,7 +72,18 @@ interface KtvState {
   getMyBookings: () => Booking[];
   getMyQueue: () => QueueItem | undefined;
   getMyBackup: () => BackupItem | undefined;
+  getMyQueueHistory: () => QueueItem[];
+  getMyBackupHistory: () => BackupItem[];
   getBackupPositionByType: (roomType: string, backupId: string) => number;
+  getTodayStats: () => TodayStats;
+}
+
+export interface TodayStats {
+  availableRooms: number;
+  usingRooms: number;
+  pendingBookings: number;
+  notifiedBackups: number;
+  callingQueue: number;
 }
 
 export const useKtvStore = create<KtvState>((set, get) => ({
@@ -297,12 +309,10 @@ export const useKtvStore = create<KtvState>((set, get) => ({
 
   cancelQueue: (queueId) => {
     try {
-      const { queue } = get();
-      const queueItem = queue.find(q => q.id === queueId);
-      if (!queueItem) return false;
-
       set(state => ({
-        queue: state.queue.filter(q => q.id !== queueId)
+        queue: state.queue.map(q =>
+          q.id === queueId ? { ...q, status: 'cancelled' as QueueStatus } : q
+        )
       }));
 
       return true;
@@ -439,10 +449,17 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       if (!backup) return false;
 
       const roomType = backup.roomType;
+      const wasNotified = backup.status === 'notified';
 
       set(state => ({
-        backupList: state.backupList.filter(b => b.id !== backupId)
+        backupList: state.backupList.map(b =>
+          b.id === backupId ? { ...b, status: 'cancelled' as BackupStatus } : b
+        )
       }));
+
+      if (wasNotified) {
+        get().notifyNextBackupByType(roomType);
+      }
 
       console.log('[Backup] 取消候补', { backupId, roomType });
       return true;
@@ -463,9 +480,10 @@ export const useKtvStore = create<KtvState>((set, get) => ({
 
       if (!availableRoom) {
         set(state => ({
-          backupList: state.backupList.filter(b => b.id !== backupId)
+          backupList: state.backupList.map(b =>
+            b.id === backupId ? { ...b, status: 'accepted' as BackupStatus } : b
+          )
         }));
-        get().notifyNextBackupByType(backup.roomType);
         console.log('[Backup] 接受补位但无可用包厢', { backupId });
         return false;
       }
@@ -489,7 +507,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       };
 
       set(state => ({
-        backupList: state.backupList.filter(b => b.id !== backupId),
+        backupList: state.backupList.map(b =>
+          b.id === backupId ? { ...b, status: 'accepted' as BackupStatus } : b
+        ),
         bookings: [...state.bookings, newBooking],
         rooms: state.rooms.map(r =>
           r.id === availableRoom.id
@@ -515,7 +535,9 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       const roomType = backup.roomType;
 
       set(state => ({
-        backupList: state.backupList.filter(b => b.id !== backupId)
+        backupList: state.backupList.map(b =>
+          b.id === backupId ? { ...b, status: 'declined' as BackupStatus } : b
+        )
       }));
 
       get().notifyNextBackupByType(roomType);
@@ -543,7 +565,11 @@ export const useKtvStore = create<KtvState>((set, get) => ({
       });
 
       set(state => ({
-        backupList: state.backupList.filter(b => !expiredBackups.find(eb => eb.id === b.id))
+        backupList: state.backupList.map(b =>
+          expiredBackups.find(eb => eb.id === b.id)
+            ? { ...b, status: 'timeout' as BackupStatus }
+            : b
+        )
       }));
 
       Object.keys(expiredByType).forEach(roomType => {
@@ -624,5 +650,55 @@ export const useKtvStore = create<KtvState>((set, get) => ({
     ).sort((a, b) => dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf());
     const index = sameTypeList.findIndex(b => b.id === backupId);
     return index >= 0 ? index + 1 : 0;
+  },
+
+  getMyQueueHistory: () => {
+    const { queue, user } = get();
+    return queue.filter(q => q.userId === user.id).sort((a, b) =>
+      dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf()
+    );
+  },
+
+  getMyBackupHistory: () => {
+    const { backupList, user } = get();
+    return backupList.filter(b => b.userId === user.id).sort((a, b) =>
+      dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf()
+    );
+  },
+
+  checkinBooking: (bookingId) => {
+    try {
+      const { bookings, rooms } = get();
+      const booking = bookings.find(b => b.id === bookingId);
+      if (!booking || booking.status !== 'pending') return false;
+
+      set(state => ({
+        bookings: state.bookings.map(b =>
+          b.id === bookingId ? { ...b, status: 'using' as BookingStatus } : b
+        ),
+        rooms: state.rooms.map(r =>
+          r.id === booking.roomId
+            ? { ...r, status: 'using' as RoomStatus, currentBooking: { ...booking, status: 'using' as BookingStatus } }
+            : r
+        )
+      }));
+
+      console.log('[Booking] 到店核销', { bookingId, roomId: booking.roomId });
+      return true;
+    } catch (error) {
+      console.error('[Booking] 核销失败', error);
+      return false;
+    }
+  },
+
+  getTodayStats: () => {
+    const { rooms, bookings, backupList, queue } = get();
+    return {
+      availableRooms: rooms.filter(r => r.status === 'available').length,
+      usingRooms: rooms.filter(r => r.status === 'using').length,
+      pendingBookings: bookings.filter(b => b.status === 'pending').length,
+      notifiedBackups: backupList.filter(b => b.status === 'notified').length,
+      callingQueue: queue.filter(q => q.status === 'calling').length
+    };
   }
 }));

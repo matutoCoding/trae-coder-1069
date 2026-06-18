@@ -1,6 +1,6 @@
 export type RoomStatus = 'available' | 'booked' | 'using' | 'maintenance';
 export type QueueStatus = 'waiting' | 'calling' | 'served' | 'overcall' | 'cancelled';
-export type BackupStatus = 'waiting' | 'notified' | 'confirmed' | 'cancelled';
+export type BackupStatus = 'waiting' | 'notified' | 'accepted' | 'declined' | 'timeout' | 'cancelled';
 export type BookingStatus = 'pending' | 'confirmed' | 'using' | 'completed' | 'cancelled' | 'timeout';
 
 export interface Room {

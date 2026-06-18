@@ -12,10 +12,12 @@ type StatusFilter = 'all' | 'available' | 'using';
 type TypeFilter = 'all' | 'mini' | 'small' | 'medium' | 'large' | 'vip';
 
 const HomePage: React.FC = () => {
-  const { rooms, checkTimeoutBookings, setCurrentBooking } = useKtvStore();
+  const { rooms, checkTimeoutBookings, setCurrentBooking, getTodayStats } = useKtvStore();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [filteredRooms, setFilteredRooms] = useState<Room[]>(rooms);
+
+  const stats = getTodayStats();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -69,9 +71,26 @@ const HomePage: React.FC = () => {
     Taro.switchTab({ url: '/pages/backup/index' });
   };
 
-  const availableCount = rooms.filter(r => r.status === 'available').length;
-  const usingCount = rooms.filter(r => r.status === 'using').length;
-  const bookedCount = rooms.filter(r => r.status === 'booked').length;
+  const handleStatClick = (type: string) => {
+    switch (type) {
+      case 'available':
+        setStatusFilter('available');
+        break;
+      case 'using':
+        setStatusFilter('using');
+        break;
+      case 'pending':
+        setStatusFilter('all');
+        Taro.showToast({ title: '待到店预订', icon: 'none' });
+        break;
+      case 'notified':
+        Taro.switchTab({ url: '/pages/backup/index' });
+        break;
+      case 'calling':
+        Taro.switchTab({ url: '/pages/queue/index' });
+        break;
+    }
+  };
 
   const typeOptions: { key: TypeFilter; label: string }[] = [
     { key: 'all', label: '全部' },
@@ -89,18 +108,29 @@ const HomePage: React.FC = () => {
         <Text className={styles.subtitle}>选择您心仪的包厢，开启欢乐时光</Text>
       </View>
 
-      <View className={styles.statsBar}>
-        <View className={styles.statItem}>
-          <Text className={styles.statValue}>{availableCount}</Text>
-          <Text className={styles.statLabel}>空闲</Text>
-        </View>
-        <View className={styles.statItem}>
-          <Text className={styles.statValue}>{usingCount}</Text>
-          <Text className={styles.statLabel}>使用中</Text>
-        </View>
-        <View className={styles.statItem}>
-          <Text className={styles.statValue}>{bookedCount}</Text>
-          <Text className={styles.statLabel}>已预订</Text>
+      <View className={styles.overviewCard}>
+        <Text className={styles.overviewTitle}>📊 今日运营概览</Text>
+        <View className={styles.overviewGrid}>
+          <View className={styles.overviewItem} onClick={() => handleStatClick('available')}>
+            <Text className={classnames(styles.overviewValue, styles.ovAvailable)}>{stats.availableRooms}</Text>
+            <Text className={styles.overviewLabel}>空闲</Text>
+          </View>
+          <View className={styles.overviewItem} onClick={() => handleStatClick('using')}>
+            <Text className={classnames(styles.overviewValue, styles.ovUsing)}>{stats.usingRooms}</Text>
+            <Text className={styles.overviewLabel}>使用中</Text>
+          </View>
+          <View className={styles.overviewItem} onClick={() => handleStatClick('pending')}>
+            <Text className={classnames(styles.overviewValue, styles.ovPending)}>{stats.pendingBookings}</Text>
+            <Text className={styles.overviewLabel}>待到店</Text>
+          </View>
+          <View className={styles.overviewItem} onClick={() => handleStatClick('notified')}>
+            <Text className={classnames(styles.overviewValue, styles.ovNotified)}>{stats.notifiedBackups}</Text>
+            <Text className={styles.overviewLabel}>候补通知</Text>
+          </View>
+          <View className={styles.overviewItem} onClick={() => handleStatClick('calling')}>
+            <Text className={classnames(styles.overviewValue, styles.ovCalling)}>{stats.callingQueue}</Text>
+            <Text className={styles.overviewLabel}>叫号中</Text>
+          </View>
         </View>
       </View>
 

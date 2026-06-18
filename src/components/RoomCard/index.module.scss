@@ -249,6 +249,12 @@
   }
 }
 
+.checkinBtn {
+  background: rgba(255, 215, 0, 0.15);
+  color: $color-neon-gold;
+  border: 1rpx solid rgba(255, 215, 0, 0.3);
+}
+
 .usingBtn {
   background: rgba(0, 255, 136, 0.15);
   color: $color-neon-green;

@@ -366,11 +366,13 @@ export const getStatusText = (status: string): string => {
     served: '已入座',
     overcall: '已过号',
     cancelled: '已取消',
-    pending: '待确认',
+    pending: '待到店',
     confirmed: '已确认',
     completed: '已完成',
     timeout: '已超时',
-    notified: '已通知'
+    notified: '补位通知',
+    accepted: '已接受',
+    declined: '已放弃'
   };
   return map[status] || status;
 };

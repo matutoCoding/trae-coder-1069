@@ -275,21 +275,25 @@
   &:not(:last-child)::after {
     content: '';
     position: absolute;
-    left: 14rpx;
-    top: 40rpx;
+    left: 28rpx;
+    top: 60rpx;
     bottom: 0;
     width: 2rpx;
     background: $color-divider;
   }
 }
 
-.timelineDot {
-  width: 30rpx;
-  height: 30rpx;
-  border-radius: 50%;
+.timelineIcon {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(157, 78, 221, 0.15);
+  border-radius: $radius-md;
+  font-size: 28rpx;
   flex-shrink: 0;
-  margin-top: 8rpx;
-  box-shadow: 0 0 16rpx rgba(157, 78, 221, 0.4);
+  margin-top: 4rpx;
 }
 
 .timelineContent {
@@ -303,8 +307,25 @@
 .timelineHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: $spacing-sm;
+  gap: $spacing-sm;
+}
+
+.timelineTitleRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+}
+
+.timelineTypeTag {
+  font-size: 20rpx;
+  color: $color-primary-light;
+  background: rgba(157, 78, 221, 0.15);
+  padding: 2rpx 12rpx;
+  border-radius: $radius-xs;
+  border: 1rpx solid rgba(157, 78, 221, 0.3);
 }
 
 .timelineTitle {
@@ -313,37 +334,29 @@
   color: $color-text-primary;
 }
 
-.timelineMeta {
-  margin-bottom: $spacing-xs;
-}
-
-.timelineMetaItem {
+.timelineSubtitle {
   font-size: $font-size-sm;
   color: $color-text-secondary;
-  display: block;
-  margin-bottom: 4rpx;
+  margin-bottom: $spacing-sm;
 }
 
-.warningText {
-  color: $color-warning;
-}
-
-.timelineTime {
+.timelineTimeRow {
   display: flex;
-  align-items: center;
-  gap: 8rpx;
+  gap: $spacing-md;
   flex-wrap: wrap;
   padding-top: $spacing-sm;
   border-top: 1rpx solid $color-divider;
-  margin-top: $spacing-sm;
+}
+
+.timeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
 }
 
 .timeLabel {
-  font-size: $font-size-xs;
+  font-size: 20rpx;
   color: $color-text-tertiary;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 4rpx 12rpx;
-  border-radius: $radius-xs;
 }
 
 .timeValue {
@@ -352,9 +365,9 @@
   font-weight: $font-weight-medium;
 }
 
-.timeSeparator {
-  font-size: $font-size-xs;
-  color: $color-text-tertiary;
+.priceValue {
+  color: $color-primary-light;
+  font-weight: $font-weight-semibold;
 }
 
 .timeExpired {

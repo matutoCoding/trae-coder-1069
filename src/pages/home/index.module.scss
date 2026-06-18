@@ -93,35 +93,70 @@
   margin-bottom: $spacing-md;
 }
 
-.statsBar {
-  display: flex;
-  justify-content: space-around;
+.overviewCard {
+  margin: 0 $page-padding $spacing-lg;
   padding: $spacing-lg;
   background: $color-bg-card;
-  border-radius: $radius-lg;
-  margin: 0 $page-padding $spacing-lg;
   border: 1rpx solid $color-border;
+  border-radius: $radius-lg;
+  backdrop-filter: blur(20rpx);
 }
 
-.statItem {
+.overviewTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+}
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: $spacing-sm;
+}
+
+.overviewItem {
   text-align: center;
+  padding: $spacing-sm 4rpx;
+  border-radius: $radius-md;
+  transition: all $transition-fast;
+
+  &:active {
+    background: rgba(255, 255, 255, 0.05);
+    transform: scale(0.95);
+  }
 }
 
-.statValue {
+.overviewValue {
   display: block;
   font-size: 40rpx;
   font-weight: $font-weight-bold;
-  background: linear-gradient(135deg, $color-primary-light 0%, $color-secondary-light 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  margin-bottom: 4rpx;
 }
 
-.statLabel {
-  display: block;
-  font-size: $font-size-sm;
+.overviewLabel {
+  font-size: 20rpx;
   color: $color-text-tertiary;
-  margin-top: $spacing-xs;
+}
+
+.ovAvailable {
+  color: $color-neon-blue;
+}
+
+.ovUsing {
+  color: $color-neon-green;
+}
+
+.ovPending {
+  color: $color-neon-gold;
+}
+
+.ovNotified {
+  color: $color-secondary;
+}
+
+.ovCalling {
+  color: $color-primary-light;
 }
 
 .emptyState {

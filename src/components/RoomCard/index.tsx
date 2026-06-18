@@ -15,7 +15,7 @@ interface RoomCardProps {
 }
 
 const RoomCard: React.FC<RoomCardProps> = ({ room, onBook }) => {
-  const { updateRoomStatus, clearRoom } = useKtvStore();
+  const { updateRoomStatus, clearRoom, checkinBooking } = useKtvStore();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [countdown, setCountdown] = useState({ minutes: 0, seconds: 0, expired: false });
   const [staffMenuOpen, setStaffMenuOpen] = useState(false);
@@ -48,6 +48,21 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onBook }) => {
   const handleStaffAction = (action: string) => {
     setStaffMenuOpen(false);
     switch (action) {
+      case 'checkin':
+        if (!room.currentBooking) return;
+        Taro.showModal({
+          title: '到店核销',
+          content: `确认${room.currentBooking.userName}已到店，开始使用${room.name}？`,
+          success: (res) => {
+            if (res.confirm) {
+              const success = checkinBooking(room.currentBooking!.id);
+              if (success) {
+                Taro.showToast({ title: '核销成功', icon: 'success' });
+              }
+            }
+          }
+        });
+        break;
       case 'using':
         Taro.showModal({
           title: '确认操作',
@@ -185,6 +200,11 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onBook }) => {
         <View className={styles.staffMenu}>
           <Text className={styles.staffMenuTitle}>店员操作</Text>
           <View className={styles.staffMenuGrid}>
+            {room.status === 'booked' && room.currentBooking && (
+              <Button className={classnames(styles.staffBtn, styles.checkinBtn)} onClick={() => handleStaffAction('checkin')}>
+                到店核销
+              </Button>
+            )}
             {room.status !== 'using' && (
               <Button className={classnames(styles.staffBtn, styles.usingBtn)} onClick={() => handleStaffAction('using')}>
                 标记使用中
